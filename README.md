@@ -1,7 +1,5 @@
 # github-actions-validate-release
 
-## Validate Release Deployment
-
 A GitHub composite action that validates release deployments by checking:
 1. Tag format follows semantic versioning
 2. Git tag exists in the repository
@@ -30,7 +28,7 @@ jobs:
     runs-on: arc-runners-bisnow
     steps:
       - name: Validate Release
-        uses: bisnow/github-actions-validate-release-deployment@v1.0
+        uses: bisnow/github-actions-validate-release@v1.0
         with: 
           tag: ${{ inputs.tag }}
           ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
@@ -40,7 +38,7 @@ jobs:
 
 ```yaml
 - name: Validate Release
-  uses: bisnow/github-actions-validate-release-deployment@v1.0
+  uses: bisnow/github-actions-validate-release@v1.0
   with:
     tag: ${{ inputs.tag }}
     ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
