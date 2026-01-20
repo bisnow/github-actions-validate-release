@@ -1,0 +1,84 @@
+name: 'Validate tag format and if tag/image exist'
+description: 'Validates git tag format, checks if git tag exists, check if image with tag exists'
+inputs:
+  tag:
+    description: 'Git/ image tag'
+    required: true
+  ECR_REGISTRY:
+    description: 'ECR registry where image can be found'
+    required: true
+  aws-account: 
+    description: 'Aws account to assume'
+    required: false
+    default: 'bisnow'
+  aws-region:
+    description: 'aws region where ECR repo is'
+    required: false
+    default: 'us-east-1'
+
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Validate tag format
+      shell: bash
+      run: |
+        TAG="${{ inputs.tag }}"
+
+        # Check if tag starts with 'v' and follows semantic versioning pattern
+        if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+          echo "✅ Valid tag format: $TAG"
+        else
+          echo "❌ Invalid tag format: $TAG"
+          echo "Tag must start with 'v' and follow semantic versioning (e.g., v1.0.0)"
+          exit 1
+        fi
+
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Check if tag exists
+      shell: bash
+      run: |
+        TAG="${{ inputs.tag }}"
+
+        # Check if the tag exists locally
+        if git rev-parse "$TAG" >/dev/null 2>&1; then
+          echo "✅ Tag $TAG exists locally"
+        else
+          # Try to fetch the tag from remote
+          git fetch --tags
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "✅ Tag $TAG exists on remote"
+          else
+            echo "❌ Tag $TAG does not exist"
+            exit 1
+          fi
+        fi
+
+    - name: Log into AWS
+      uses: bisnow/github-actions-assume-role-for-environment@main
+      with:
+        aws-account: ${{ inputs.aws-account }}
+
+    - name: Check if Docker image exists in ECR
+      shell: bash
+      run: |
+        TAG="${{ inputs.tag }}"
+        echo "Checking if image exists: ${{ inputs.ECR_REGISTRY }}:$TAG"
+
+        # Extract repo name from registry URL (everything after first /)
+        REPO_NAME="${{ inputs.ECR_REGISTRY }}"
+        REPO_NAME="${REPO_NAME#*/}"
+        echo "Repository name: $REPO_NAME"
+
+        # Check if the image exists in ECR
+        if aws ecr describe-images --repository-name "$REPO_NAME" --image-ids imageTag=$TAG --region ${{ inputs.aws-region }} >/dev/null 2>&1; then
+          echo "✅ Image ${{ inputs.ECR_REGISTRY }}:$TAG exists in ECR"
+        else
+          echo "❌ Image ${{ inputs.ECR_REGISTRY }}:$TAG does not exist in ECR"
+          echo "Please ensure the tag-release workflow has been run for this tag first."
+          exit 1
+        fi
