@@ -21,13 +21,19 @@ runs:
   using: 'composite'
   steps:
     - name: Validate tag format
+      id: validate
       shell: bash
       run: |
         TAG="${{ inputs.tag }}"
 
-        # Check if tag starts with 'v' and follows semantic versioning pattern, or is an rc-* tag
-        if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]] || [[ "$TAG" =~ ^rc-[0-9]+$ ]]; then
-          echo "✅ Valid tag format: $TAG"
+        # Check if tag is a release candidate (rc-*)
+        if [[ "$TAG" =~ ^rc-[0-9]+$ ]]; then
+          echo "✅ Valid release candidate tag format: $TAG"
+          echo "is_rc=true" >> $GITHUB_OUTPUT
+        # Check if tag starts with 'v' and follows semantic versioning pattern
+        elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+          echo "✅ Valid semantic version tag format: $TAG"
+          echo "is_rc=false" >> $GITHUB_OUTPUT
         else
           echo "❌ Invalid tag format: $TAG"
           echo "Tag must either start with 'v' and follow semantic versioning (e.g., v1.0.0) or be a release candidate (e.g., rc-123)"
@@ -35,11 +41,13 @@ runs:
         fi
 
     - name: Checkout Repository
+      if: steps.validate.outputs.is_rc == 'false'
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
-    - name: Check if tag exists
+    - name: Check if git tag exists
+      if: steps.validate.outputs.is_rc == 'false'
       shell: bash
       run: |
         TAG="${{ inputs.tag }}"
