@@ -25,12 +25,12 @@ runs:
       run: |
         TAG="${{ inputs.tag }}"
 
-        # Check if tag starts with 'v' and follows semantic versioning pattern
-        if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]]; then
+        # Check if tag starts with 'v' and follows semantic versioning pattern, or is an rc-* tag
+        if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+.*$ ]] || [[ "$TAG" =~ ^rc-[0-9]+$ ]]; then
           echo "✅ Valid tag format: $TAG"
         else
           echo "❌ Invalid tag format: $TAG"
-          echo "Tag must start with 'v' and follow semantic versioning (e.g., v1.0.0)"
+          echo "Tag must either start with 'v' and follow semantic versioning (e.g., v1.0.0) or be a release candidate (e.g., rc-123)"
           exit 1
         fi
 
