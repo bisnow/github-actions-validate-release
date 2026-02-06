@@ -69,4 +69,11 @@ This action performs validation in the following order:
    - Queries AWS ECR to verify an image with the specified tag exists
    - Fails if image is not found
 
+   ## Versioning
 
+This action uses rolling major version tags. You can pin to:
+
+- A specific version: `@v3.1.0` (exact, never changes)
+- A major version: `@v3` (recommended, gets bug fixes and new features)
+
+When a new semantic version tag (e.g., `v3.2.0`) is pushed, a GitHub Actions workflow automatically updates the corresponding major version tag (`v3`) to point to the new release.
