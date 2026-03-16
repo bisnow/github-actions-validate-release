@@ -42,7 +42,7 @@ runs:
 
     - name: Checkout Repository
       if: steps.validate.outputs.is_rc == 'false'
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0
 
