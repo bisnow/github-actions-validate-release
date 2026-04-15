@@ -66,6 +66,45 @@ runs:
           fi
         fi
 
+    - name: Wait for tag-release workflow
+      if: steps.validate.outputs.is_rc == 'false'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        TAG="${{ inputs.tag }}"
+        echo "Waiting for tag-release workflow for $TAG..."
+        for i in $(seq 1 40); do
+          result=$(gh run list \
+            --repo ${{ github.repository }} \
+            --workflow=tag-release.yml \
+            --json status,conclusion,headBranch \
+            --jq "[.[] | select(.headBranch == \"$TAG\")] | .[0]")
+
+          if [[ -z "$result" || "$result" == "null" ]]; then
+            echo "No tag-release run found yet, retrying... ($i/40)"
+            sleep 30
+            continue
+          fi
+
+          status=$(echo "$result" | jq -r '.status')
+          conclusion=$(echo "$result" | jq -r '.conclusion')
+          echo "tag-release status: $status, conclusion: $conclusion"
+
+          if [[ "$status" == "completed" && "$conclusion" == "success" ]]; then
+            echo "✅ Tag-release completed. Image $TAG is ready in ECR."
+            exit 0
+          elif [[ "$status" == "completed" ]]; then
+            echo "❌ Tag-release did not succeed (conclusion: $conclusion). Aborting."
+            exit 1
+          fi
+
+          echo "Still in progress, retrying in 30s... ($i/40)"
+          sleep 30
+        done
+        echo "❌ Timed out after 20 minutes waiting for tag-release."
+        exit 1
+
     - name: Log into AWS
       uses: bisnow/github-actions-assume-role-for-environment@main
       with:
