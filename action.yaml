@@ -15,7 +15,10 @@ inputs:
     description: 'aws region where ECR repo is'
     required: false
     default: 'us-east-1'
-
+  tag-release-workflow:
+    description: 'Filename of the tag-release workflow to wait for'
+    required: false
+    default: 'tag-release.yml'
 
 runs:
   using: 'composite'
@@ -77,7 +80,8 @@ runs:
         for i in $(seq 1 40); do
           result=$(gh run list \
             --repo ${{ github.repository }} \
-            --workflow=tag-release.yml \
+            --workflow=${{ inputs.tag-release-workflow }} \
+            --limit 100 \
             --json status,conclusion,headBranch \
             --jq "[.[] | select(.headBranch == \"$TAG\")] | .[0]")
 
