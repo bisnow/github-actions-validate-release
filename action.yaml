@@ -6,8 +6,9 @@ inputs:
     required: true
   ECR_REGISTRY:
     description: 'ECR registry where image can be found'
-    required: true
-  aws-account: 
+    required: false
+    default: ''
+  aws-account:
     description: 'Aws account to assume'
     required: false
     default: 'bisnow'
@@ -19,6 +20,15 @@ inputs:
     description: 'Filename of the tag-release workflow to wait for'
     required: false
     default: 'tag-release.yml'
+  HARBOR_REGISTRY:
+    description: 'Harbor registry where image can be found (e.g. harbor.bisnow.cloud/bisnow/my-service)'
+    required: false
+    default: ''
+  only-harbor:
+    description: 'Use only harbor, no ecr'
+    required: false
+    type: boolean
+    default: false
 
 runs:
   using: 'composite'
@@ -70,7 +80,7 @@ runs:
         fi
 
     - name: Wait for tag-release workflow
-      if: steps.validate.outputs.is_rc == 'false'
+      if: steps.validate.outputs.is_rc == 'false' && inputs.only-harbor != 'true'
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
@@ -110,11 +120,13 @@ runs:
         exit 1
 
     - name: Log into AWS
+      if: ${{ inputs.only-harbor != 'true' }}
       uses: bisnow/github-actions-assume-role-for-environment@main
       with:
         aws-account: ${{ inputs.aws-account }}
 
     - name: Check if Docker image exists in ECR
+      if: ${{ inputs.only-harbor != 'true' }}
       shell: bash
       run: |
         TAG="${{ inputs.tag }}"
@@ -130,6 +142,40 @@ runs:
           echo "✅ Image ${{ inputs.ECR_REGISTRY }}:$TAG exists in ECR"
         else
           echo "❌ Image ${{ inputs.ECR_REGISTRY }}:$TAG does not exist in ECR"
+          echo "Please ensure the tag-release workflow has been run for this tag first."
+          exit 1
+        fi
+
+    - name: Save Harbor credentials
+      if: ${{ inputs.only-harbor == 'true' }}
+      id: harbor-creds
+      shell: bash
+      run: |
+        if [ -f /home/runner/.docker/config.json ]; then
+          HARBOR_PASSWORD=$(python3 -c "import json; c=json.load(open('/home/runner/.docker/config.json')); print(c['auths']['harbor.bisnow.cloud']['password'])")
+          echo "::add-mask::${HARBOR_PASSWORD}"
+          echo "password=${HARBOR_PASSWORD}" >> $GITHUB_OUTPUT
+        else
+          echo "::warning::No Docker config found at /home/runner/.docker/config.json"
+        fi
+
+    - name: Login to Harbor
+      if: ${{ inputs.only-harbor == 'true' && steps.harbor-creds.outputs.password != '' }}
+      shell: bash
+      run: |
+        echo "${{ steps.harbor-creds.outputs.password }}" | docker login harbor.bisnow.cloud -u 'robot$arc-cicd' --password-stdin
+
+    - name: Check if Docker image exists in Harbor
+      if: ${{ inputs.only-harbor == 'true' }}
+      shell: bash
+      run: |
+        TAG="${{ inputs.tag }}"
+        echo "Checking if image exists: ${{ inputs.HARBOR_REGISTRY }}:$TAG"
+
+        if docker manifest inspect ${{ inputs.HARBOR_REGISTRY }}:$TAG >/dev/null 2>&1; then
+          echo "✅ Image ${{ inputs.HARBOR_REGISTRY }}:$TAG exists in Harbor"
+        else
+          echo "❌ Image ${{ inputs.HARBOR_REGISTRY }}:$TAG does not exist in Harbor"
           echo "Please ensure the tag-release workflow has been run for this tag first."
           exit 1
         fi
